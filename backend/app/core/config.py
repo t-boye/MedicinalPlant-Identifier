@@ -7,7 +7,12 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "Medicinal Plant Identifier"
 
     # CORS
-    ALLOWED_ORIGINS: List[str] = ["http://localhost:8081", "exp://localhost:8081"]
+    ALLOWED_ORIGINS: List[str] = [
+        "http://localhost:5173",  # Frontend dev server
+        "http://localhost:3000",
+        "http://localhost:8081",
+        "exp://localhost:8081"
+    ]
 
     # Database
     DATABASE_URL: str = "postgresql://user:password@localhost/medicinal_plants_db"
