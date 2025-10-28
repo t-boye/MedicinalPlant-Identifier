@@ -16,6 +16,10 @@ from ml_model.utils.inference import PlantIdentifier
 from app.models.plant import MedicinalPlant
 from sqlalchemy.orm import Session
 from app.core.config import settings
+from app.core.logging_config import get_logger
+
+# Initialize logger
+logger = get_logger(__name__)
 
 router = APIRouter()
 
@@ -29,23 +33,30 @@ def get_plant_identifier():
 
     if plant_identifier is None:
         # Load model
-        model_path = os.getenv('MODEL_PATH', './saved_models/plant_cnn_efficientnet.keras')
+        model_path = os.getenv('MODEL_PATH', settings.MODEL_PATH)
+
+        logger.info(f"Loading model from: {model_path}")
 
         if not os.path.exists(model_path):
+            error_msg = f"Model not found at {model_path}. Please train the model first."
+            logger.error(error_msg)
             raise HTTPException(
                 status_code=500,
-                detail=f"Model not found at {model_path}. Please train the model first."
+                detail=error_msg
             )
 
         try:
             plant_identifier = PlantIdentifier(
                 model_path=model_path,
-                confidence_threshold=0.3  # Lower threshold to show more alternatives
+                confidence_threshold=settings.CONFIDENCE_THRESHOLD
             )
+            logger.info(f"Model loaded successfully with {plant_identifier.num_classes} classes")
         except Exception as e:
+            error_msg = f"Failed to load model: {str(e)}"
+            logger.error(error_msg, exc_info=True)
             raise HTTPException(
                 status_code=500,
-                detail=f"Failed to load model: {str(e)}"
+                detail=error_msg
             )
 
     return plant_identifier
@@ -66,8 +77,11 @@ async def identify_plant(
     Returns:
         Identification results with confidence scores
     """
+    logger.info(f"Received plant identification request for file: {file.filename}")
+
     # Validate file type
     if not file.content_type.startswith('image/'):
+        logger.warning(f"Invalid file type: {file.content_type}")
         raise HTTPException(
             status_code=400,
             detail="File must be an image"
@@ -76,6 +90,7 @@ async def identify_plant(
     try:
         # Read image bytes
         image_bytes = await file.read()
+        logger.debug(f"Image size: {len(image_bytes)} bytes")
 
         # Get identifier
         identifier = get_plant_identifier()
@@ -84,6 +99,7 @@ async def identify_plant(
         predictions = identifier.predict_from_bytes(image_bytes, top_k=top_k)
 
         if not predictions:
+            logger.info("No confident predictions found")
             return JSONResponse(
                 status_code=200,
                 content={
@@ -91,6 +107,8 @@ async def identify_plant(
                     "predictions": []
                 }
             )
+
+        logger.info(f"Prediction successful: {predictions[0]['class_name']} ({predictions[0]['confidence']:.2%})")
 
         # Format response
         result = {
@@ -105,10 +123,14 @@ async def identify_plant(
 
         return JSONResponse(content=result)
 
+    except HTTPException:
+        raise
     except Exception as e:
+        error_msg = f"Error processing image: {str(e)}"
+        logger.error(error_msg, exc_info=True)
         raise HTTPException(
             status_code=500,
-            detail=f"Error processing image: {str(e)}"
+            detail=error_msg
         )
 
 

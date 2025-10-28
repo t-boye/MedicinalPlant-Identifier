@@ -1,2 +1,12 @@
 #dataset
 /app/dataset
+
+#environment
+.env
+.env.local
+
+#venv
+venv
+
+#saved trained models
+saved_models
